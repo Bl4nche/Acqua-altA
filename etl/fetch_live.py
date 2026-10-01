@@ -59,8 +59,9 @@ def main():
 
     LIVE_CSV.parent.mkdir(parents=True, exist_ok=True)
     if LIVE_CSV.exists():
-        old = pd.read_csv(LIVE_CSV, parse_dates=["timestamp_utc"])
+        old = pd.read_csv(LIVE_CSV)
         new = pd.concat([old, new])
+    new["timestamp_utc"] = pd.to_datetime(new["timestamp_utc"], utc=True, format="ISO8601")
     new = (new.drop_duplicates("timestamp_utc")
               .query("livello_cm.abs() < 300")            # scarta valori impossibili
               .sort_values("timestamp_utc"))
