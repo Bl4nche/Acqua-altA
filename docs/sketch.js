@@ -4,7 +4,10 @@ let layer = null;     // grafica con lo storico, disegnata una volta sola
 let hoverIdx = -1;
 
 const LOW = 20, HIGH = 185, THRESHOLD = 110;
-const RING_IN = 0.10, RING_OUT = 0.34;     // fascia degli anelli storici (frazione della larghezza)
+const RING_IN = 0.10, RING_OUT = 0.30;     // fascia degli anelli storici (frazione della larghezza)
+const TRAIL_COUNT = 18;                    // quante linee nella scia del live
+const TRAIL_GAP = 0.012;                   // distanza tra anello attuale e prima linea della scia
+const TRAIL_SPREAD = 0.04;                 // quanto si apre la scia verso l'interno
 const hueOf = cm => map(constrain(cm, LOW, HIGH), LOW, HIGH, 190, 8);   // turchese -> rosso
 const scale = () => width / 900;
 
@@ -96,8 +99,8 @@ function renderHistory() {
 }
 
 // ---------- il presente: anello esterno in movimento ----------
-// k = intensità del movimento (1 per l'anello attuale, meno per la scia)
-function liveBlob(cm, surge, seed, t, k) {
+// k = intensità del movimento, offset = spostamento verso l'interno (frazione della larghezza)
+function liveBlob(cm, surge, seed, t, k, offset = 0) {
   const base = map(constrain(cm, -50, 190), -50, 190, 0.40, 0.425) * width;
   const surgeAmt = map(constrain(abs(surge ?? 0), 0, 60), 0, 60, 0, 1);
   const amp = (0.008 + 0.014 * surgeAmt) * width * k;     // sempre visibile, più forte col meteo
@@ -107,7 +110,7 @@ function liveBlob(cm, surge, seed, t, k) {
     const n = noise(cos(a) * 1.6 + seed, sin(a) * 1.6 + seed, t) - 0.5;
     const ripple = 0.35 * sin(a * 6 + frameCount * 0.04 + seed * 10)
                  + 0.35 * sin(a * 3 - frameCount * 0.025);
-    const r = min(base * pulse + amp * (2 * n + ripple), 0.468 * width);
+    const r = min(base * pulse + amp * (2 * n + ripple), 0.468 * width) - offset * width;
     vertex(r * cos(a), r * sin(a));
   }
   endShape(CLOSE);
@@ -118,12 +121,15 @@ function drawLive() {
   const h = hueOf(cur.cm);
   noFill();
 
-  // scia: letture degli ultimi giorni
-  const step = max(1, floor(r.length / 90));
-  for (let i = 0; i < r.length - 1; i += step) {
-    stroke(hueOf(r[i].cm), 70, 100, 14);
-    strokeWeight(1 * scale());
-    liveBlob(r[i].cm, r[i].surge, i * 0.05, t, 0.7);
+  // scia: letture degli ultimi giorni, distribuite verso l'interno
+  const N = min(TRAIL_COUNT, r.length - 1);
+  for (let j = 0; j < N; j++) {
+    const pos = (j + 1) / (N + 1);                         // 0 = più vecchia, 1 = più recente
+    const i = round(pos * (r.length - 1));
+    const offset = TRAIL_GAP + TRAIL_SPREAD * (1 - pos);
+    stroke(hueOf(r[i].cm), 70, 100, 22);
+    strokeWeight(1.2 * scale());
+    liveBlob(r[i].cm, r[i].surge, i * 0.05, t, 0.7, offset);
   }
 
   // anello attuale: corpo luminoso + alone + contorno
