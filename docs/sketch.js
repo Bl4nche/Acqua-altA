@@ -4,6 +4,7 @@ let layer = null;     // grafica con lo storico, disegnata una volta sola
 let hoverIdx = -1;
 
 const LOW = 20, HIGH = 185, THRESHOLD = 110;
+const RING_IN = 0.10, RING_OUT = 0.34;     // fascia degli anelli storici (frazione della larghezza)
 const hueOf = cm => map(constrain(cm, LOW, HIGH), LOW, HIGH, 190, 8);   // turchese -> rosso
 const scale = () => width / 900;
 
@@ -35,7 +36,7 @@ function windowResized() {
   if (hist) renderHistory();
 }
 
-// ---------- storico: un anello per anno ----------
+// ---------- storico: un anello per anno (2002 al centro, 2025 all'esterno) ----------
 function buildRings(data) {
   const byYear = {};
   for (const d of data.days) {
@@ -43,7 +44,7 @@ function buildRings(data) {
     const doy = Math.round((Date.UTC(y, m - 1, dd) - Date.UTC(y, 0, 1)) / 864e5);
     (byYear[y] ??= [])[doy] = d.max;
   }
-  const rings = data.years.slice().sort((a, b) => b.y - a.y).map(info => {
+  const rings = data.years.slice().sort((a, b) => a.y - b.y).map(info => {
     const n = info.y % 4 === 0 ? 366 : 365;
     let raw = Array.from({ length: n }, (_, i) => (byYear[info.y] || [])[i]);
     let last = raw.find(v => v != null) ?? 50;
@@ -57,7 +58,7 @@ function buildRings(data) {
   return { rings };
 }
 
-const ringRadius = idx => map(idx, 0, hist.rings.length - 1, 0.15, 0.43) * width;
+const ringRadius = idx => map(idx, 0, hist.rings.length - 1, RING_IN, RING_OUT) * width;
 
 function ringPoint(ring, i, idx) {
   const a = -HALF_PI + TWO_PI * i / ring.n;                       // gennaio in alto
@@ -94,37 +95,50 @@ function renderHistory() {
   });
 }
 
-// ---------- il presente: nucleo al centro ----------
-const coreRadius = cm => map(constrain(cm, -50, 190), -50, 190, 0.03, 0.085) * width;
-
-function blob(cm, surge, seed, t) {
-  const wobble = map(constrain(abs(surge ?? 0), 0, 60), 0, 60, 0.08, 0.5);
-  const base = coreRadius(cm);
+// ---------- il presente: anello esterno in movimento ----------
+// k = intensità del movimento (1 per l'anello attuale, meno per la scia)
+function liveBlob(cm, surge, seed, t, k) {
+  const base = map(constrain(cm, -50, 190), -50, 190, 0.40, 0.425) * width;
+  const surgeAmt = map(constrain(abs(surge ?? 0), 0, 60), 0, 60, 0, 1);
+  const amp = (0.008 + 0.014 * surgeAmt) * width * k;     // sempre visibile, più forte col meteo
+  const pulse = 1 + 0.012 * sin(frameCount * 0.03);       // il respiro
   beginShape();
-  for (let a = 0; a < TWO_PI; a += 0.08) {
-    const n = noise(cos(a) + seed, sin(a) + seed, t);
-    const r = base * (1 + wobble * (n - 0.5));
+  for (let a = 0; a < TWO_PI; a += 0.04) {
+    const n = noise(cos(a) * 1.6 + seed, sin(a) * 1.6 + seed, t) - 0.5;
+    const ripple = 0.35 * sin(a * 6 + frameCount * 0.04 + seed * 10)
+                 + 0.35 * sin(a * 3 - frameCount * 0.025);
+    const r = min(base * pulse + amp * (2 * n + ripple), 0.468 * width);
     vertex(r * cos(a), r * sin(a));
   }
   endShape(CLOSE);
 }
 
-function drawCore() {
-  const r = live.readings, t = frameCount * 0.004, cur = r[r.length - 1];
-  const step = max(1, floor(r.length / 100));
+function drawLive() {
+  const r = live.readings, t = frameCount * 0.012, cur = r[r.length - 1];
+  const h = hueOf(cur.cm);
+  noFill();
+
+  // scia: letture degli ultimi giorni
+  const step = max(1, floor(r.length / 90));
   for (let i = 0; i < r.length - 1; i += step) {
-    stroke(hueOf(r[i].cm), 70, 100, 16);
+    stroke(hueOf(r[i].cm), 70, 100, 14);
     strokeWeight(1 * scale());
-    blob(r[i].cm, r[i].surge, i * 0.05, t);
+    liveBlob(r[i].cm, r[i].surge, i * 0.05, t, 0.7);
   }
-  for (let k = 3; k >= 1; k--) {
-    stroke(hueOf(cur.cm), 60, 100, 10);
-    strokeWeight(k * 5 * scale());
-    blob(cur.cm, cur.surge, r.length * 0.05, t);
+
+  // anello attuale: corpo luminoso + alone + contorno
+  fill(h, 50, 100, 4);
+  noStroke();
+  liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
+  noFill();
+  for (let g = 4; g >= 1; g--) {
+    stroke(h, 60, 100, 9);
+    strokeWeight(g * 6 * scale());
+    liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
   }
-  stroke(hueOf(cur.cm), 30, 100, 90);
-  strokeWeight(2 * scale());
-  blob(cur.cm, cur.surge, r.length * 0.05, t);
+  stroke(h, 25, 100, 95);
+  strokeWeight(3 * scale());
+  liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
 }
 
 // ---------- hover ----------
@@ -132,8 +146,8 @@ function updateHover() {
   hoverIdx = -1;
   if (!hist || mouseX < 0 || mouseY < 0 || mouseX > width || mouseY > height) return;
   const d = dist(mouseX, mouseY, width / 2, height / 2);
-  const idx = round(map(d, 0.15 * width, 0.43 * width, 0, hist.rings.length - 1));
-  if (idx >= 0 && idx < hist.rings.length && abs(d - ringRadius(idx)) < 0.02 * width) hoverIdx = idx;
+  const idx = round(map(d, RING_IN * width, RING_OUT * width, 0, hist.rings.length - 1));
+  if (idx >= 0 && idx < hist.rings.length && abs(d - ringRadius(idx)) < 0.012 * width) hoverIdx = idx;
 }
 
 function drawHover() {
@@ -155,7 +169,7 @@ function draw() {
   blendMode(SCREEN);
   noFill();
   if (hoverIdx >= 0) drawHover();
-  if (live && live.readings.length) drawCore();
+  if (live && live.readings.length) drawLive();
   pop();
   blendMode(BLEND);
   drawHud();
@@ -183,6 +197,6 @@ function drawHud() {
   }
   fill(0, 0, 70);
   textSize(fs - 3);
-  text("Al centro: adesso. Ogni anello è un anno, dal 2025 (dentro) al 2002 (fuori); gennaio in alto.", 16, height - 22);
+  text("Anello esterno: adesso. Dentro, un anello per anno dal 2002 (centro) al 2025; gennaio in alto.", 16, height - 22);
   text("Dati: Comune di Venezia, CPSM (CC-BY). Non validati: non usare come allerta.", 16, height - 8);
 }
