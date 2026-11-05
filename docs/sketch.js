@@ -4,10 +4,7 @@ let layer = null;     // grafica con lo storico, disegnata una volta sola
 let hoverIdx = -1;
 
 const LOW = 20, HIGH = 185, THRESHOLD = 110;
-const RING_IN = 0.10, RING_OUT = 0.30;     // fascia degli anelli storici (frazione della larghezza)
-const TRAIL_COUNT = 18;                    // quante linee nella scia del live
-const TRAIL_GAP = 0.012;                   // distanza tra anello attuale e prima linea della scia
-const TRAIL_SPREAD = 0.04;                 // quanto si apre la scia verso l'interno
+const RING_IN = 0.12, RING_OUT = 0.36;     // fascia degli anelli storici (frazione della larghezza)
 const hueOf = cm => map(constrain(cm, LOW, HIGH), LOW, HIGH, 190, 8);   // turchese -> rosso
 const scale = () => width / 900;
 
@@ -134,18 +131,12 @@ function drawLabels(g) {
     const am = a0 + PI / 12;
     g.stroke(0, 0, 100, 25);
     g.strokeWeight(1);
-    g.line(0.335 * width * cos(a0), 0.335 * width * sin(a0),
-           0.348 * width * cos(a0), 0.348 * width * sin(a0));
+    g.line(0.415 * width * cos(a0), 0.415 * width * sin(a0),
+           0.428 * width * cos(a0), 0.428 * width * sin(a0));
     g.noStroke();
     g.fill(0, 0, 100, 55);
-    g.text(MONTHS[m], 0.355 * width * cos(am), 0.355 * width * sin(am));
+    g.text(MONTHS[m], 0.44 * width * cos(am), 0.44 * width * sin(am));
   }
-
-  // primo anno al centro, ultimo sopra l'anello esterno
-  const last = hist.rings.length - 1;
-  g.fill(0, 0, 100, 70);
-  g.text(hist.rings[0].info.y, 0, 0);
-  g.text(hist.rings[last].info.y, 0, -0.322 * width);
 
   // annotazione: il giorno più alto del 2019, con una linea verso l'angolo più vicino
   const idx = hist.rings.findIndex(r => r.info.y === 2019);
@@ -165,53 +156,75 @@ function drawLabels(g) {
   g.text(`La marea più alta dal 2002\n${d}/${m}/${y} · ${info.max_cm} cm`, tx, ty);
 }
 
-// ---------- il presente: anello esterno in movimento ----------
-// k = intensità del movimento, offset = spostamento verso l'interno (frazione della larghezza)
-function liveBlob(cm, surge, seed, t, k, offset = 0) {
-  const base = map(constrain(cm, -50, 190), -50, 190, 0.40, 0.425) * width;
-  const surgeAmt = map(constrain(abs(surge ?? 0), 0, 60), 0, 60, 0, 1);
-  const amp = (0.008 + 0.014 * surgeAmt) * width * k;     // sempre visibile, più forte col meteo
-  const pulse = 1 + 0.012 * sin(frameCount * 0.03);       // il respiro
-  beginShape();
-  for (let a = 0; a < TWO_PI; a += 0.04) {
-    const n = noise(cos(a) * 1.6 + seed, sin(a) * 1.6 + seed, t) - 0.5;
-    const ripple = 0.35 * sin(a * 6 + frameCount * 0.04 + seed * 10)
-                 + 0.35 * sin(a * 3 - frameCount * 0.025);
-    const r = min(base * pulse + amp * (2 * n + ripple), 0.468 * width) - offset * width;
-    vertex(r * cos(a), r * sin(a));
+// ---------- il presente: l'anello del 2026 che si scrive un giorno alla volta ----------
+function nowRing() {
+  if (!hist || !live || !live.days || !live.days.length) return null;
+  const y = Number(live.days[live.days.length - 1].d.slice(0, 4));
+  if (hist.rings.some(r => r.info.y === y)) return null;         // l'anno è già nell'archivio
+  const n = y % 4 === 0 ? 366 : 365;
+  const vals = new Array(n).fill(null);
+  for (const d of live.days) {
+    const [yy, m, dd] = d.d.split("-").map(Number);
+    if (yy !== y) continue;
+    vals[Math.round((Date.UTC(yy, m - 1, dd) - Date.UTC(yy, 0, 1)) / 864e5)] = d.max;
   }
-  endShape(CLOSE);
+  return { y, n, vals, idx: hist.rings.length };
 }
 
-function drawLive() {
-  const r = live.readings, t = frameCount * 0.012, cur = r[r.length - 1];
-  const h = hueOf(cur.cm);
-  noFill();
+const NOW_GAP = 0.02;                       // spazio in più tra l'ultimo anno dell'archivio e quello di oggi
 
-  // scia: letture degli ultimi giorni, distribuite verso l'interno
-  const N = min(TRAIL_COUNT, r.length - 1);
-  for (let j = 0; j < N; j++) {
-    const pos = (j + 1) / (N + 1);                         // 0 = più vecchia, 1 = più recente
-    const i = round(pos * (r.length - 1));
-    const offset = TRAIL_GAP + TRAIL_SPREAD * (1 - pos);
-    stroke(hueOf(r[i].cm), 70, 100, 22);
-    strokeWeight(1.2 * scale());
-    liveBlob(r[i].cm, r[i].surge, i * 0.05, t, 0.7, offset);
-  }
+function nowPoint(ring, i, v) {
+  const a = -HALF_PI + TWO_PI * i / ring.n;
+  const r = ringRadius(ring.idx) + NOW_GAP * width + (v - 60) * 0.22 * scale();
+  return [r * cos(a), r * sin(a)];
+}
 
-  // anello attuale: corpo luminoso + alone + contorno
-  fill(h, 50, 100, 4);
+function drawNowRing() {
+  const ring = nowRing();
+  if (!ring) return;
+  const days = ring.vals.map((v, i) => [i, v]).filter(([, v]) => v != null);
+  const [lastI, lastV] = days[days.length - 1];
+
+  // la parte dell'anno ancora da scrivere: un cerchio di puntini appena visibile
   noStroke();
-  liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
-  noFill();
-  for (let g = 4; g >= 1; g--) {
-    stroke(h, 60, 100, 9);
-    strokeWeight(g * 6 * scale());
-    liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
+  fill(0, 0, 100, 35);
+  for (let i = lastI + 2; i < ring.n; i += 2) {
+    const [x, y] = nowPoint(ring, i, 60);
+    circle(x, y, 2.2 * scale());
   }
-  stroke(h, 25, 100, 95);
-  strokeWeight(3 * scale());
-  liveBlob(cur.cm, cur.surge, r.length * 0.05, t, 1);
+
+  // la parte già scritta: come gli altri anelli, ma più luminosa
+  noFill();
+  for (let k = 1; k < days.length; k++) {
+    const [i0, v0] = days[k - 1], [i1, v1] = days[k];
+    if (i1 - i0 > 3) continue;                                   // non unisco buchi lunghi
+    const [x0, y0] = nowPoint(ring, i0, v0), [x1, y1] = nowPoint(ring, i1, v1);
+    stroke(hueOf(v1), 55, 100, 14); strokeWeight(7 * scale());
+    line(x0, y0, x1, y1);
+    stroke(hueOf(v1), 25, 100, 95); strokeWeight(2.2 * scale());
+    line(x0, y0, x1, y1);
+  }
+
+  // la punta della penna: oggi, con il livello dell'ultima lettura
+  const cur = live.readings[live.readings.length - 1];
+  const [tx, ty] = nowPoint(ring, lastI, lastV);
+  const glow = 1 + 0.25 * sin(frameCount * 0.05);
+  noStroke();
+  for (let g = 4; g >= 1; g--) {
+    fill(hueOf(cur.cm), 60, 100, 10);
+    circle(tx, ty, g * 7 * glow * scale());
+  }
+  fill(0, 0, 100, 95);
+  circle(tx, ty, 5 * scale());
+
+  // etichetta accanto alla punta, rivolta verso l'esterno
+  blendMode(BLEND);
+  fill(0, 0, 100, 90);
+  textSize(max(10, 12 * scale()));
+  textAlign(tx < 0 ? RIGHT : LEFT, CENTER);
+  const out = 14 * scale() * (tx < 0 ? -1 : 1);
+  text(`${ring.y} · oggi ${cur.cm.toFixed(0)} cm`, tx + out, ty);
+  blendMode(SCREEN);
 }
 
 // ---------- hover ----------
@@ -242,7 +255,7 @@ function draw() {
   blendMode(SCREEN);
   noFill();
   if (hoverIdx >= 0) drawHover();
-  if (live && live.readings.length) drawLive();
+  if (live && hist) drawNowRing();
   pop();
   blendMode(BLEND);
   drawHud();
