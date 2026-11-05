@@ -2,8 +2,6 @@
 
 **Venice's tides, turned into glowing glass rings.** Live data in the outer ring, 24 years of history inside.
 
-![Acqua Alta screenshot](docs/screenshot.png)
-
 **Live demo → https://bl4nche.github.io/Acqua-altA/**
 
 ---
