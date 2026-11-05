@@ -1,0 +1,4 @@
+data/raw/
+__pycache__/
+data/processed/hourly.csv
+.vscode/
