@@ -31,9 +31,13 @@ def fetch_reading():
 
 
 def astronomical_cm(local_time):
-    """Marea astronomica (cm) allo stesso istante, dal file dell'anno."""
+    """Marea astronomica (cm) allo stesso istante, dal file dell'anno. None se non disponibile."""
     year = local_time[:4]
-    data = get_json(f"as{year}min.json")
+    try:
+        data = get_json(f"as{year}min.json")
+    except requests.RequestException as e:
+        print(f"Marea astronomica non disponibile ({e}): salvo solo il livello.")
+        return None
     return next((float(d["valore"]) for d in data if d["data"] == local_time), None)
 
 
