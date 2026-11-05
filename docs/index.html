@@ -1,13 +1,81 @@
-<header>
-  <h1>Acqua Alta</h1>
-  <p>Le maree di Venezia trasformate in anelli di vetro: dentro 24 anni di storia, fuori il livello di adesso.</p>
-</header>
-<section id="live">
-  <span class="label">Adesso a Punta della Salute</span>
-  <strong id="live-cm">–</strong>
-  <span id="live-class"></span>
-  <small id="live-meta"></small>
-</section>
-<div id="viz"></div>
-<section id="legend"> … </section>
-<footer>Dati: Comune di Venezia – CPSM (CC-BY). Non validati, non usare come allerta.</footer>
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acqua Alta – le maree di Venezia</title>
+  <meta name="description" content="Le maree di Venezia trasformate in anelli di vetro: dati live e 24 anni di storico.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0d1a;
+      --text: #ece8e1;
+      --muted: #8d90a6;
+      --line: #23263a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); }
+    body {
+      font-family: "Inter", system-ui, sans-serif;
+      max-width: 900px; margin: 0 auto; padding: 32px 16px 48px;
+    }
+    h1 { font-family: "Fraunces", serif; font-weight: 600; font-size: 2.6rem; margin: 0 0 8px; }
+    header p { color: var(--muted); margin: 0 0 28px; line-height: 1.5; }
+
+    #live {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px;
+      padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 24px;
+    }
+    #live .label { width: 100%; font-size: .8rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+    #live-cm { font-family: "Fraunces", serif; font-size: 2.4rem; }
+    #live-class { font-weight: 500; }
+    #live-meta { width: 100%; color: var(--muted); }
+
+    #viz { display: flex; justify-content: center; }
+    canvas { display: block; max-width: 100%; height: auto !important; }
+
+    #legend { margin-top: 24px; color: var(--muted); font-size: .9rem; line-height: 1.6; }
+    .scale {
+      position: relative; height: 10px; border-radius: 5px; margin: 8px 0 26px;
+      background: linear-gradient(to right, hsl(190 85% 60%), hsl(130 75% 58%) 35%, hsl(70 90% 58%) 65%, hsl(8 90% 60%));
+    }
+    .scale span { position: absolute; top: 14px; transform: translateX(-50%); font-size: .75rem; }
+    footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: .8rem; }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Acqua Alta</h1>
+    <p>Le maree di Venezia trasformate in anelli di vetro: dentro 24 anni di storia, fuori il livello di adesso.</p>
+  </header>
+
+  <section id="live">
+    <span class="label">Adesso a Punta della Salute</span>
+    <strong id="live-cm">–</strong>
+    <span id="live-class"></span>
+    <small id="live-meta">Carico i dati…</small>
+  </section>
+
+  <div id="viz"></div>
+
+  <section id="legend">
+    <div>Livello della marea</div>
+    <div class="scale">
+      <span style="left:0">20 cm</span>
+      <span style="left:36%">80</span>
+      <span style="left:55%">110</span>
+      <span style="left:73%">140</span>
+      <span style="left:100%">185 cm</span>
+    </div>
+    <p>Ogni anello è un anno: dal 2002 al centro al 2025 all'esterno, con gennaio in alto e i mesi in senso orario.
+       Più la linea si allarga, più l'acqua era alta. I puntini sono i giorni sopra i 110 cm.
+       L'anello esterno che si muove è la marea di adesso.</p>
+  </section>
+
+  <footer>Dati: Comune di Venezia – CPSM (CC-BY). Dati non validati: non usare come allerta.</footer>
+
+  <script src="sketch.js"></script>
+</body>
+</html>

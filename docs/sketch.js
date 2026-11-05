@@ -17,16 +17,36 @@ async function loadJson(path) {
   return res.json();
 }
 async function refreshLive() {
-  try { live = await loadJson("live.json"); } catch (e) { console.warn(e); }
+  try { live = await loadJson("live.json"); updateLiveBox(); } catch (e) { console.warn(e); }
 }
 async function loadHistory() {
   try { hist = buildRings(await loadJson("tides.json")); renderHistory(); }
   catch (e) { console.warn(e); }
 }
 
+function tideClass(cm) {
+  if (cm >= 140) return "marea eccezionale";
+  if (cm >= 110) return "marea molto sostenuta";
+  if (cm >= 80) return "marea sostenuta";
+  return "marea normale";
+}
+
+function updateLiveBox() {
+  if (!live || !live.readings.length) return;
+  const cur = live.readings[live.readings.length - 1];
+  const when = new Date(live.updated).toLocaleString("it-IT",
+    { timeZone: "Europe/Rome", dateStyle: "short", timeStyle: "short" });
+  const surge = cur.surge == null ? ""
+    : `sovralzo meteo ${cur.surge > 0 ? "+" : ""}${cur.surge.toFixed(0)} cm · `;
+  select("#live-cm").html(`${cur.cm.toFixed(0)} cm`);
+  select("#live-class").html(tideClass(cur.cm))
+    .style("color", color(hueOf(cur.cm), 60, 100).toString());
+  select("#live-meta").html(`${surge}aggiornato ${when}`);
+}
+
 function setup() {
-  const s = min(windowWidth, 900);
-  createCanvas(s, s);
+  const s = min(windowWidth -32, 900);
+  createCanvas(s, s).parent("viz");
   colorMode(HSB, 360, 100, 100, 100);
   noiseSeed(7);                       // stessa forma di vetro a ogni caricamento
   refreshLive();
@@ -35,7 +55,7 @@ function setup() {
 }
 
 function windowResized() {
-  resizeCanvas(min(windowWidth, 900), min(windowWidth, 900));
+  resizeCanvas(min(windowWidth -32, 900), min(windowWidth -32, 900));
   if (hist) renderHistory();
 }
 
@@ -188,13 +208,6 @@ function drawHud() {
   textSize(fs);
   textAlign(LEFT, TOP);
   if (!live && !hist) { textAlign(CENTER, CENTER); text("Carico i dati della laguna…", width / 2, height / 2); return; }
-  if (live && live.readings.length) {
-    const cur = live.readings[live.readings.length - 1];
-    const when = new Date(live.updated).toLocaleString("it-IT", { timeZone: "Europe/Rome", dateStyle: "short", timeStyle: "short" });
-    text(`Adesso, Punta della Salute: ${cur.cm.toFixed(0)} cm`, 16, 16);
-    if (cur.surge != null) text(`Sovralzo meteo: ${cur.surge > 0 ? "+" : ""}${cur.surge.toFixed(0)} cm`, 16, 16 + fs * 1.5);
-    text(`Aggiornato: ${when}`, 16, 16 + fs * 3);
-  }
   textAlign(LEFT, BOTTOM);
   if (hoverIdx >= 0) {
     const i = hist.rings[hoverIdx].info, [y, m, d] = i.max_day.split("-");
@@ -202,9 +215,6 @@ function drawHud() {
     text(`${i.y}: massimo ${i.max_cm} cm (${d}/${m}) · ${i.high_days} giorni sopra ${THRESHOLD} cm`, 16, height - 34);
   }
   fill(0, 0, 70);
-  textSize(fs - 3);
-  text("Anello esterno: adesso. Dentro, un anello per anno dal 2002 (centro) al 2025; gennaio in alto.", 16, height - 22);
-  text("Dati: Comune di Venezia, CPSM (CC-BY). Non validati: non usare come allerta.", 16, height - 8);
-}
+  }
 
 function touchStarted() { updateHover(); }
