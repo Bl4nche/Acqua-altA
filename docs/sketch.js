@@ -1,4 +1,4 @@
-let live = null;      // dati live (ultimi 7 giorni)
+let live = null;      // dati live: ultimi 7 giorni + massimo di ogni giorno dell'anno in corso
 let hist = null;      // anelli storici
 let layer = null;     // grafica con lo storico, disegnata una volta sola
 let hoverIdx = -1;
@@ -41,8 +41,12 @@ function updateLiveBox() {
   select("#live-meta").html(`${surge}aggiornato ${when}`);
 }
 
+// lato del canvas = larghezza del riquadro #viz: così il canvas non viene rimpicciolito dal CSS
+// e le coordinate del mouse corrispondono a quelle del disegno
+const vizSize = () => min(document.getElementById("viz").clientWidth, 900);
+
 function setup() {
-  const s = min(windowWidth -32, 900);
+  const s = vizSize();
   createCanvas(s, s).parent("viz");
   colorMode(HSB, 360, 100, 100, 100);
   noiseSeed(7);                       // stessa forma di vetro a ogni caricamento
@@ -52,7 +56,7 @@ function setup() {
 }
 
 function windowResized() {
-  resizeCanvas(min(windowWidth -32, 900), min(windowWidth -32, 900));
+  resizeCanvas(vizSize(), vizSize());
   if (hist) renderHistory();
 }
 
@@ -114,11 +118,12 @@ function renderHistory() {
     layer.noFill();
   });
   drawLabels(layer);
+  drawMose(layer);
 }
 
 const MONTHS = ["G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D"];
 
-// ---------- etichette: mesi, primo e ultimo anno, la marea più alta ----------
+// ---------- etichette: i mesi attorno agli anelli ----------
 function drawLabels(g) {
   g.blendMode(BLEND);
   g.textFont("Inter");
@@ -137,26 +142,54 @@ function drawLabels(g) {
     g.fill(0, 0, 100, 55);
     g.text(MONTHS[m], 0.44 * width * cos(am), 0.44 * width * sin(am));
   }
-
-  // annotazione: il giorno più alto del 2019, con una linea verso l'angolo più vicino
-  const idx = hist.rings.findIndex(r => r.info.y === 2019);
-  if (idx < 0) return;
-  const ring = hist.rings[idx], info = ring.info;
-  const [y, m, d] = info.max_day.split("-").map(Number);
-  const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 864e5);
-  const [px, py] = ringPoint(ring, doy, idx);
-  const tx = (px < 0 ? -1 : 1) * 0.47 * width;
-  const ty = (py < 0 ? -1 : 1) * 0.45 * height;
-  g.stroke(0, 0, 100, 50);
-  g.strokeWeight(1);
-  g.line(px, py, tx, ty);
-  g.noStroke();
-  g.fill(0, 0, 100, 90);
-  g.textAlign(px < 0 ? LEFT : RIGHT, py < 0 ? BOTTOM : TOP);
-  g.text(`La marea più alta dal 2002\n${d}/${m}/${y} · ${info.max_cm} cm`, tx, ty);
 }
 
-// ---------- il presente: l'anello del 2026 che si scrive un giorno alla volta ----------
+// ---------- MOSE: una tacca sul giorno della prima attivazione; il resto compare con l'hover ----------
+const MOSE_DAY = "2020-10-03";
+let mosePts = null;     // linea "prima/dopo", disegnata solo quando si passa sugli anni con il MOSE
+
+function moseInfo() {
+  const [y, m, d] = MOSE_DAY.split("-").map(Number);
+  const i = hist.rings.findIndex(r => r.info.y === y);
+  if (i < 1 || i + 1 >= hist.rings.length) return null;
+  const fm = (Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 864e5 / hist.rings[i].n;
+  return { y, m, d, i, fm };
+}
+
+const isMoseYear = idx => { const M = moseInfo(); return M != null && idx >= M.i; };
+
+// punto a metà tra due anelli vicini, allo stesso angolo (frazione dell'anno f, da 0 a 1)
+function between(idxA, idxB, f) {
+  const A = hist.rings[idxA], B = hist.rings[idxB];
+  const [ax, ay] = ringPoint(A, round(f * A.n) % A.n, idxA);
+  const [bx, by] = ringPoint(B, round(f * B.n) % B.n, idxB);
+  return [(ax + bx) / 2, (ay + by) / 2];
+}
+
+function drawMose(g) {
+  const M = moseInfo();
+  mosePts = null;
+  if (!M) return;
+  const { i, fm } = M;
+
+  // la linea prima/dopo: tra l'anno prima e l'anno MOSE fino al giorno, poi tra l'anno MOSE e quello dopo
+  mosePts = [];
+  for (let f = 0; f <= fm; f += 0.002) mosePts.push(between(i - 1, i, f));
+  mosePts.push(between(i - 1, i, fm), between(i, i + 1, fm));
+  for (let f = fm; f <= 1.0001; f += 0.002) mosePts.push(between(i, i + 1, f));
+
+  // la tacca: una piccola paratoia di traverso sull'anello, nel giorno della prima attivazione
+  const ring = hist.rings[i];
+  const [px, py] = ringPoint(ring, round(fm * ring.n) % ring.n, i);
+  const a = -HALF_PI + TWO_PI * fm, len = 3.5 * scale();
+  g.blendMode(BLEND);
+  g.stroke(185, 30, 100, 25); g.strokeWeight(4 * scale());
+  g.line(px - len * cos(a), py - len * sin(a), px + len * cos(a), py + len * sin(a));
+  g.stroke(185, 15, 100, 95); g.strokeWeight(1.6 * scale());
+  g.line(px - len * cos(a), py - len * sin(a), px + len * cos(a), py + len * sin(a));
+}
+
+// ---------- il presente: l'anello dell'anno in corso che si scrive un giorno alla volta ----------
 function nowRing() {
   if (!hist || !live || !live.days || !live.days.length) return null;
   const y = Number(live.days[live.days.length - 1].d.slice(0, 4));
@@ -243,6 +276,13 @@ function drawHover() {
   beginShape();
   for (let i = 0; i < ring.n; i++) { const [x, y] = ringPoint(ring, i, hoverIdx); vertex(x, y); }
   endShape(CLOSE);
+  if (mosePts && isMoseYear(hoverIdx)) {                        // anni con il MOSE: compare la linea prima/dopo
+    drawingContext.setLineDash([4 * scale(), 4 * scale()]);
+    stroke(185, 20, 100, 45);
+    strokeWeight(1.2 * scale());
+    beginShape(); mosePts.forEach(([x, y]) => vertex(x, y)); endShape();
+    drawingContext.setLineDash([]);
+  }
 }
 
 // ---------- disegno ----------
@@ -266,15 +306,15 @@ function drawHud() {
   noStroke();
   fill(0, 0, 95);
   textSize(fs);
-  textAlign(LEFT, TOP);
   if (!live && !hist) { textAlign(CENTER, CENTER); text("Carico i dati della laguna…", width / 2, height / 2); return; }
   textAlign(LEFT, BOTTOM);
   if (hoverIdx >= 0) {
     const i = hist.rings[hoverIdx].info, [y, m, d] = i.max_day.split("-");
+    const M = moseInfo();
+    const mose = !isMoseYear(hoverIdx) ? "" : i.y === M.y ? ` · MOSE dal ${M.d}/${M.m}` : " · protetto dal MOSE";
     fill(0, 0, 100);
-    text(`${i.y}: massimo ${i.max_cm} cm (${d}/${m}) · ${i.high_days} giorni sopra ${THRESHOLD} cm`, 16, height - 34);
+    text(`${i.y}: massimo ${i.max_cm} cm (${d}/${m}) · ${i.high_days} giorni sopra ${THRESHOLD} cm${mose}`, 16, height - 34);
   }
-  fill(0, 0, 70);
-  }
+}
 
 function touchStarted() { updateHover(); }
