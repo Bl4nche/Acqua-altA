@@ -206,3 +206,5 @@ function drawHud() {
   text("Anello esterno: adesso. Dentro, un anello per anno dal 2002 (centro) al 2025; gennaio in alto.", 16, height - 22);
   text("Dati: Comune di Venezia, CPSM (CC-BY). Non validati: non usare come allerta.", 16, height - 8);
 }
+
+function touchStarted() { updateHover(); }
