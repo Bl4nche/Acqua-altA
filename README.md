@@ -31,7 +31,14 @@ Comune di Venezia open data
 - **Not real-time:** GitHub runs the scheduled job only 3–4 times a day, so daily maxima for the current year can be lower than the true peak.
 - **Data gap:** there is no measured data between the end of the archive (31 Dec 2025) and the start of live collection (30 Sep 2026). The gap will close when the Comune publishes the 2026 archive.
 - **Not for warnings:** the data is not validated. For official forecasts, see the Centro Previsioni e Segnalazioni Maree.
-- **MOSE:** since 2020 the MOSE barriers have closed the lagoon during the worst tides. That may explain the lower peaks after 2020, but this is a hypothesis, not a proven result.
+
+## What about MOSE?
+
+MOSE is the system of mobile barriers at the three inlets of the lagoon. When a high tide is forecast, they rise and close Venice off from the sea.
+
+- **First used on 3 October 2020.** In the first seasons the barriers were raised for forecasts of about 130 cm. The threshold then went down to 120 cm, and **from the 2024–25 season it is 110 cm**.
+- **What this means for the data:** Punta della Salute is *inside* the lagoon. When MOSE is up, the station measures the protected water level, not the tide outside. Since late 2020 the rings therefore show what the city actually experienced, not what the sea alone would have done.
+- **So fewer high-water days after 2020 do not mean calmer seas.** The barriers are the most likely reason, but I haven't proven it. Checking it would need the dates of each closure, or a station outside the lagoon to compare with.
 
 ## Run it locally
 
