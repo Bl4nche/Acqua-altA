@@ -116,6 +116,53 @@ function renderHistory() {
     });
     layer.noFill();
   });
+  drawLabels(layer);
+}
+
+const MONTHS = ["G", "F", "M", "A", "M", "G", "L", "A", "S", "O", "N", "D"];
+
+// ---------- etichette: mesi, primo e ultimo anno, la marea più alta ----------
+function drawLabels(g) {
+  g.blendMode(BLEND);
+  g.textFont("Inter");
+  g.textSize(max(9, 11 * scale()));
+  g.textAlign(CENTER, CENTER);
+
+  // mesi attorno agli anelli: una tacca all'inizio del mese, la lettera a metà
+  for (let m = 0; m < 12; m++) {
+    const a0 = -HALF_PI + TWO_PI * m / 12;
+    const am = a0 + PI / 12;
+    g.stroke(0, 0, 100, 25);
+    g.strokeWeight(1);
+    g.line(0.335 * width * cos(a0), 0.335 * width * sin(a0),
+           0.348 * width * cos(a0), 0.348 * width * sin(a0));
+    g.noStroke();
+    g.fill(0, 0, 100, 55);
+    g.text(MONTHS[m], 0.355 * width * cos(am), 0.355 * width * sin(am));
+  }
+
+  // primo anno al centro, ultimo sopra l'anello esterno
+  const last = hist.rings.length - 1;
+  g.fill(0, 0, 100, 70);
+  g.text(hist.rings[0].info.y, 0, 0);
+  g.text(hist.rings[last].info.y, 0, -0.322 * width);
+
+  // annotazione: il giorno più alto del 2019, con una linea verso l'angolo più vicino
+  const idx = hist.rings.findIndex(r => r.info.y === 2019);
+  if (idx < 0) return;
+  const ring = hist.rings[idx], info = ring.info;
+  const [y, m, d] = info.max_day.split("-").map(Number);
+  const doy = Math.round((Date.UTC(y, m - 1, d) - Date.UTC(y, 0, 1)) / 864e5);
+  const [px, py] = ringPoint(ring, doy, idx);
+  const tx = (px < 0 ? -1 : 1) * 0.47 * width;
+  const ty = (py < 0 ? -1 : 1) * 0.45 * height;
+  g.stroke(0, 0, 100, 50);
+  g.strokeWeight(1);
+  g.line(px, py, tx, ty);
+  g.noStroke();
+  g.fill(0, 0, 100, 90);
+  g.textAlign(px < 0 ? LEFT : RIGHT, py < 0 ? BOTTOM : TOP);
+  g.text(`La marea più alta dal 2002\n${d}/${m}/${y} · ${info.max_cm} cm`, tx, ty);
 }
 
 // ---------- il presente: anello esterno in movimento ----------
