@@ -79,9 +79,14 @@ def main():
         "astro": None if pd.isna(r.astronomica_cm) else r.astronomica_cm,
         "surge": None if pd.isna(r.sovralzo_cm) else r.sovralzo_cm,
     } for r in recent.itertuples()]
+        # massimo di ogni giorno (ora solare UTC+1, come l'archivio) per l'anello dell'anno in corso
+    local = new.set_index("timestamp_utc")["livello_cm"].tz_convert("Etc/GMT-1")
+    daily = local.resample("1D").max().dropna()
+    days = [{"d": d.strftime("%Y-%m-%d"), "max": int(round(v))} for d, v in daily.items()]
     LIVE_JSON.parent.mkdir(parents=True, exist_ok=True)
     LIVE_JSON.write_text(json.dumps({"updated": new["timestamp_utc"].max().isoformat(),
-                                     "readings": readings}))
+                                     "readings": readings,
+                                     "days": days}))
     print(f"OK: {local_time} -> {cm:.1f} cm (astronomica {astro}). Righe totali: {len(new)}")
 
 
